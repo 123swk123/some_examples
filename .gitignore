@@ -8,3 +8,6 @@ hs_err_pid*
 null
 project
 target
+.bloop
+.metals
+
