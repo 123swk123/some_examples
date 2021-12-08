@@ -13,29 +13,46 @@ class SPILogic(dataWidth: Int) extends Component {
         val dataOut = out UInt(dataWidth bits)
     }
     
-    val regData = Reg(io.dataIn) init(io.dataIn)
+    
     // val regDataIn = Reg(io.dataOut) init(0)
-    val spiDataWidth = Reg(UInt(log2Up(dataWidth) bits)) init(dataWidth - 1)
+    
     val prescaleCounter = Reg(UInt(4 bits)) init(0)
     val regSCK = Reg(Bool()) init(False)
 
-    io.sck <> regSCK
-    io.mosi <> regData(dataWidth - 1)
-    io.miso <> regData(0)
-    io.dataOut <> regData
-    io.cs := True
 
-    prescaleCounter := prescaleCounter + 1
-    when(prescaleCounter === 1) {
-        prescaleCounter := 0
-        regSCK := !regSCK
+    val spiClockFallingLogic = new ClockingArea(ClockDomain(regSCK, ClockDomain.current.readResetWire, config = ClockDomainConfig(FALLING))) {
+        val spiDataShiftCounter = Reg(UInt(log2Up(dataWidth+1) bits)) init(dataWidth) addTag(crossClockDomain)
+        val regData = Reg(io.dataIn) init(io.dataIn)
 
-        when(spiDataWidth > 0) {
+        io.sck <> regSCK
+        io.mosi <> regData(dataWidth - 1)
+        io.dataOut <> regData
+        io.cs := True
+
+        when(spiDataShiftCounter > 0) {
             io.cs := False
-            spiDataWidth := spiDataWidth - 1
+            spiDataShiftCounter := spiDataShiftCounter - 1
             regData := regData |<< 1
             // regDataIn := regDataIn |>> 1
         }
+    }
+
+    val spiClockRisingLogic = new ClockingArea(ClockDomain(regSCK, ClockDomain.current.readResetWire, 
+                                                config = ClockDomainConfig(RISING))) {
+
+        val regData = Reg(Bool()) init(False)
+
+        when(spiClockFallingLogic.spiDataShiftCounter > 0) {
+            regData := io.miso
+            spiClockFallingLogic.regData(0) := regData
+        }
+
+    }
+
+    prescaleCounter := prescaleCounter + 1
+    when(prescaleCounter === 2 && spiClockFallingLogic.spiDataShiftCounter > 0) {
+        prescaleCounter := 0
+        regSCK := !regSCK
     }
 }
 

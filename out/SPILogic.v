@@ -1,6 +1,6 @@
 // Generator : SpinalHDL v1.6.0    git head : 73c8d8e2b86b45646e9d0b2e729291f2b65e6be3
 // Component : SPILogic
-// Git hash  : fa37f1d56c860bee9c1314f639f6a0a07f656b93
+// Git hash  : a2c265d47e10e286ea5352310bce30526c4924e6
 
 
 
@@ -11,46 +11,65 @@ module SPILogic (
   output reg          io_cs,
   input      [7:0]    io_dataIn,
   output     [7:0]    io_dataOut,
-  input               clk,
-  input               reset
+  input               reset,
+  input               clk
 );
-  reg        [7:0]    regData;
-  reg        [2:0]    spiDataWidth;
   reg        [3:0]    prescaleCounter;
   reg                 regSCK;
-  wire                when_spi_test_l29;
-  wire                when_spi_test_l33;
+  (* async_reg = "true" *) reg        [3:0]    spiClockFallingLogic_spiDataShiftCounter;
+  reg        [7:0]    spiClockFallingLogic_regData;
+  wire                when_spi_test_l32;
+  reg                 spiClockRisingLogic_regData;
+  wire                when_spi_test_l45;
+  wire                when_spi_test_l53;
 
   assign io_sck = regSCK;
-  assign io_mosi = regData[7];
-  assign io_dataOut = regData;
+  assign io_mosi = spiClockFallingLogic_regData[7];
+  assign io_dataOut = spiClockFallingLogic_regData;
   always @(*) begin
     io_cs = 1'b1;
-    if(when_spi_test_l29) begin
-      if(when_spi_test_l33) begin
-        io_cs = 1'b0;
+    if(when_spi_test_l32) begin
+      io_cs = 1'b0;
+    end
+  end
+
+  assign when_spi_test_l32 = (4'b0000 < spiClockFallingLogic_spiDataShiftCounter);
+  assign when_spi_test_l45 = (4'b0000 < spiClockFallingLogic_spiDataShiftCounter);
+  assign when_spi_test_l53 = ((prescaleCounter == 4'b0010) && (4'b0000 < spiClockFallingLogic_spiDataShiftCounter));
+  always @(posedge clk or posedge reset) begin
+    if(reset) begin
+      prescaleCounter <= 4'b0000;
+      regSCK <= 1'b0;
+    end else begin
+      prescaleCounter <= (prescaleCounter + 4'b0001);
+      if(when_spi_test_l53) begin
+        prescaleCounter <= 4'b0000;
+        regSCK <= (! regSCK);
       end
     end
   end
 
-  assign when_spi_test_l29 = (prescaleCounter == 4'b0001);
-  assign when_spi_test_l33 = (3'b000 < spiDataWidth);
-  always @(posedge clk or posedge reset) begin
+  always @(negedge regSCK or posedge reset) begin
     if(reset) begin
-      regData <= io_dataIn;
-      spiDataWidth <= 3'b111;
-      prescaleCounter <= 4'b0000;
-      regSCK <= 1'b0;
+      spiClockFallingLogic_spiDataShiftCounter <= 4'b1000;
+      spiClockFallingLogic_regData <= io_dataIn;
     end else begin
-      regData[0] <= io_miso;
-      prescaleCounter <= (prescaleCounter + 4'b0001);
-      if(when_spi_test_l29) begin
-        prescaleCounter <= 4'b0000;
-        regSCK <= (! regSCK);
-        if(when_spi_test_l33) begin
-          spiDataWidth <= (spiDataWidth - 3'b001);
-          regData <= (regData <<< 1);
-        end
+      if(when_spi_test_l32) begin
+        spiClockFallingLogic_spiDataShiftCounter <= (spiClockFallingLogic_spiDataShiftCounter - 4'b0001);
+        spiClockFallingLogic_regData <= (spiClockFallingLogic_regData <<< 1);
+      end
+      if(when_spi_test_l45) begin
+        spiClockFallingLogic_regData[0] <= spiClockRisingLogic_regData;
+      end
+    end
+  end
+
+  always @(posedge regSCK or posedge reset) begin
+    if(reset) begin
+      spiClockRisingLogic_regData <= 1'b0;
+    end else begin
+      if(when_spi_test_l45) begin
+        spiClockRisingLogic_regData <= io_miso;
       end
     end
   end
