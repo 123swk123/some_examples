@@ -18,41 +18,32 @@ class SPILogic(dataWidth: Int) extends Component {
     
     val prescaleCounter = Reg(UInt(4 bits)) init(0)
     val regSCK = Reg(Bool()) init(False)
+    val spiDataShiftCounter = Reg(UInt(log2Up(dataWidth+1) bits)) init(dataWidth)
+    val regData = Reg(io.dataIn) init(io.dataIn)
+    val regDataBit0 = Reg(Bool()) init(False)
 
 
-    val spiClockFallingLogic = new ClockingArea(ClockDomain(regSCK, ClockDomain.current.readResetWire, config = ClockDomainConfig(FALLING))) {
-        val spiDataShiftCounter = Reg(UInt(log2Up(dataWidth+1) bits)) init(dataWidth) addTag(crossClockDomain)
-        val regData = Reg(io.dataIn) init(io.dataIn)
+    io.sck <> regSCK
+    io.mosi <> regData(dataWidth - 1)
+    io.dataOut <> regData
 
-        io.sck <> regSCK
-        io.mosi <> regData(dataWidth - 1)
-        io.dataOut <> regData
-        io.cs := True
-
-        when(spiDataShiftCounter > 0) {
-            io.cs := False
-            spiDataShiftCounter := spiDataShiftCounter - 1
-            regData := regData |<< 1
-            // regDataIn := regDataIn |>> 1
-        }
-    }
-
-    val spiClockRisingLogic = new ClockingArea(ClockDomain(regSCK, ClockDomain.current.readResetWire, 
-                                                config = ClockDomainConfig(RISING))) {
-
-        val regData = Reg(Bool()) init(False)
-
-        when(spiClockFallingLogic.spiDataShiftCounter > 0) {
-            regData := io.miso
-            spiClockFallingLogic.regData(0) := regData
-        }
-
-    }
-
+    io.cs := ClockDomain.current.readResetWire || !(spiDataShiftCounter > 0) 
+    
     prescaleCounter := prescaleCounter + 1
-    when(prescaleCounter === 2 && spiClockFallingLogic.spiDataShiftCounter > 0) {
+    when(prescaleCounter === 0 && spiDataShiftCounter > 0) {
         prescaleCounter := 0
         regSCK := !regSCK
+        
+        when(regSCK === True) {
+            spiDataShiftCounter := spiDataShiftCounter - 1
+            // regData := regData |<< 1
+            regData(1 until dataWidth) := regData(0 until dataWidth-1)
+        }
+
+        when(regSCK === False) {
+            regDataBit0 := io.miso
+            regData(0) := regDataBit0
+        }
     }
 }
 
